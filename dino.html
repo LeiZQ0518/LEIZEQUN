@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小恐龙快跑</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #f7f7f7;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    h1 {
+      color: #535353;
+      margin-bottom: 12px;
+      font-size: 28px;
+      letter-spacing: 2px;
+    }
+
+    .info {
+      color: #777;
+      margin-bottom: 18px;
+      font-size: 15px;
+    }
+
+    #game {
+      position: relative;
+      width: 800px;
+      height: 250px;
+      background: #fff;
+      border: 3px solid #535353;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+
+    /* 地面 */
+    #ground {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 20px;
+      background: #535353;
+    }
+
+    /* 恐龙 */
+    #dino {
+      position: absolute;
+      bottom: 20px;
+      left: 60px;
+      width: 44px;
+      height: 48px;
+      background: #535353;
+      border-radius: 4px 4px 0 0;
+      transition: none;
+    }
+
+    /* 恐龙的简单造型（用伪元素） */
+    #dino::before {
+      content: "";
+      position: absolute;
+      top: 6px;
+      right: 4px;
+      width: 12px;
+      height: 12px;
+      background: #fff;
+      border-radius: 50%;
+    }
+
+    #dino.jump {
+      animation: jump 0.55s ease-out;
+    }
+
+    @keyframes jump {
+      0%   { bottom: 20px; }
+      40%  { bottom: 120px; }
+      100% { bottom: 20px; }
+    }
+
+    /* 仙人掌障碍物 */
+    .cactus {
+      position: absolute;
+      bottom: 20px;
+      width: 22px;
+      height: 46px;
+      background: #535353;
+      border-radius: 3px;
+    }
+
+    .cactus::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: -8px;
+      width: 10px;
+      height: 22px;
+      background: #535353;
+      border-radius: 3px;
+    }
+
+    .cactus::after {
+      content: "";
+      position: absolute;
+      top: 16px;
+      right: -8px;
+      width: 10px;
+      height: 18px;
+      background: #535353;
+      border-radius: 3px;
+    }
+
+    /* 分数 */
+    #score {
+      position: absolute;
+      top: 12px;
+      right: 18px;
+      font-size: 20px;
+      font-weight: bold;
+      color: #535353;
+    }
+
+    /* 游戏结束遮罩 */
+    #game-over {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.85);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    #game-over h2 {
+      font-size: 36px;
+      color: #535353;
+      margin-bottom: 12px;
+    }
+
+    #game-over p {
+      color: #666;
+      margin-bottom: 20px;
+      font-size: 16px;
+    }
+
+    #restart {
+      padding: 10px 28px;
+      font-size: 16px;
+      background: #535353;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #restart:hover {
+      background: #333;
+    }
+
+    .tips {
+      margin-top: 20px;
+      color: #888;
+      font-size: 14px;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 850px) {
+      #game {
+        width: 95vw;
+        height: 200px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>小恐龙快跑</h1>
+  <div class="info">按 <strong>空格键</strong> 或 <strong>↑</strong> 跳跃 · 避开仙人掌</div>
+
+  <div id="game">
+    <div id="score">0</div>
+    <div id="dino"></div>
+    <div id="ground"></div>
+
+    <div id="game-over">
+      <h2>游戏结束</h2>
+      <p>最终得分：<span id="final-score">0</span></p>
+      <button id="restart">再来一次</button>
+    </div>
+  </div>
+
+  <div class="tips">
+    提示：游戏速度会逐渐加快<br>
+    在 VSCode 中可用 Live Server 插件实时预览
+  </div>
+
+  <script>
+    const game = document.getElementById("game");
+    const dino = document.getElementById("dino");
+    const scoreEl = document.getElementById("score");
+    const gameOverEl = document.getElementById("game-over");
+    const finalScoreEl = document.getElementById("final-score");
+    const restartBtn = document.getElementById("restart");
+
+    let isJumping = false;
+    let isGameOver = false;
+    let score = 0;
+    let speed = 6;          // 障碍物移动速度
+    let cactusInterval;
+    let scoreInterval;
+    let gameLoop;
+
+    // 跳跃
+    function jump() {
+      if (isJumping || isGameOver) return;
+      isJumping = true;
+      dino.classList.add("jump");
+
+      setTimeout(() => {
+        dino.classList.remove("jump");
+        isJumping = false;
+      }, 550);
+    }
+
+    // 生成仙人掌
+    function createCactus() {
+      if (isGameOver) return;
+
+      const cactus = document.createElement("div");
+      cactus.classList.add("cactus");
+      cactus.style.right = "-30px";
+      game.appendChild(cactus);
+
+      let cactusLeft = -30;
+
+      const move = setInterval(() => {
+        if (isGameOver) {
+          clearInterval(move);
+          return;
+        }
+
+        cactusLeft += speed;
+        cactus.style.right = cactusLeft + "px";
+
+        // 碰撞检测（简单矩形判断）
+        const dinoRect = dino.getBoundingClientRect();
+        const cactusRect = cactus.getBoundingClientRect();
+
+        const dinoBottom = parseInt(window.getComputedStyle(dino).bottom);
+
+        if (
+          cactusRect.left < dinoRect.right - 10 &&
+          cactusRect.right > dinoRect.left + 10 &&
+          dinoBottom < 70
+        ) {
+          // 撞到了
+          endGame();
+          clearInterval(move);
+        }
+
+        // 超出屏幕就删除
+        if (cactusLeft > game.offsetWidth + 50) {
+          clearInterval(move);
+          cactus.remove();
+        }
+      }, 20);
+    }
+
+    // 开始游戏
+    function startGame() {
+      isGameOver = false;
+      score = 0;
+      speed = 6;
+      scoreEl.textContent = "0";
+      gameOverEl.style.display = "none";
+
+      // 清除旧障碍物
+      document.querySelectorAll(".cactus").forEach(c => c.remove());
+
+      // 分数增加
+      scoreInterval = setInterval(() => {
+        if (!isGameOver) {
+          score++;
+          scoreEl.textContent = score;
+
+          // 每 15 分加速一点
+          if (score % 15 === 0) {
+            speed += 0.6;
+          }
+        }
+      }, 100);
+
+      // 定时生成仙人掌
+      cactusInterval = setInterval(() => {
+        // 随机间隔，增加变化
+        if (Math.random() > 0.4) {
+          createCactus();
+        }
+      }, 1400);
+    }
+
+    // 结束游戏
+    function endGame() {
+      isGameOver = true;
+      clearInterval(cactusInterval);
+      clearInterval(scoreInterval);
+      finalScoreEl.textContent = score;
+      gameOverEl.style.display = "flex";
+    }
+
+    // 重新开始
+    restartBtn.addEventListener("click", startGame);
+
+    // 键盘控制
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space" || e.code === "ArrowUp") {
+        e.preventDefault();
+        if (isGameOver) {
+          startGame();
+        } else {
+          jump();
+        }
+      }
+    });
+
+    // 鼠标/触摸也能跳
+    game.addEventListener("click", () => {
+      if (isGameOver) {
+        startGame();
+      } else {
+        jump();
+      }
+    });
+
+    // 页面加载后自动开始
+    startGame();
+  </script>
+</body>
+</html>
